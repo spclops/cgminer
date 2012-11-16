@@ -167,6 +167,10 @@ int gpur_thr_id;
 static int api_thr_id;
 static int total_threads;
 
+#ifdef HAVE_LIBUSB
+pthread_mutex_t cgusb_lock;
+#endif
+
 static pthread_mutex_t hash_lock;
 static pthread_mutex_t qd_lock;
 static pthread_mutex_t *stgd_lock;
@@ -6577,8 +6581,15 @@ int main(int argc, char *argv[])
 	for  (i = 0; i < argc; i++)
 		initial_args[i] = strdup(argv[i]);
 	initial_args[argc] = NULL;
+
 #ifdef HAVE_LIBUSB
-        libusb_init(NULL);
+	int err = libusb_init(NULL);
+	if (err) {
+		fprintf(stderr, "libusb_init() failed err %d", err);
+		fflush(stderr);
+		quit(1, "libusb_init() failed");
+	}
+	mutex_init(&cgusb_lock);
 #endif
 
 	mutex_init(&hash_lock);

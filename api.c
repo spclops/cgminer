@@ -1383,27 +1383,8 @@ static void pgastatus(int pga, bool isjson)
 			frequency = cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1);
 #endif
 #ifdef USE_MODMINER
-// TODO: a modminer has up to 4 devices but only 1 set of data for all ...
-// except 4 sets of data for temp/clock
-// So this should change in the future to just find the single temp/clock
-// if the modminer code splits the device into seperate devices later
-// For now, just display the highest temp and the average clock
-		if (cgpu->api == &modminer_api) {
-			int tc = cgpu->threads;
-			int i;
-
-			temp = 0;
-			if (tc > 4)
-				tc = 4;
-			for (i = 0; i < tc; i++) {
-				struct thr_info *thr = cgpu->thr[i];
-				struct modminer_fpga_state *state = thr->cgpu_data;
-				if (state->temp > temp)
-					temp = state->temp;
-				frequency += state->clock;
-			}
-			frequency /= (tc ? tc : 1);
-		}
+		if (cgpu->api == &modminer_api)
+			frequency = cgpu->clock;
 #endif
 
 		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
