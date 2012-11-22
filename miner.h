@@ -662,6 +662,9 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
+#ifdef HAVE_LIBUSB
+extern bool opt_usb_dump;
+#endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif

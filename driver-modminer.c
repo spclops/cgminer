@@ -70,7 +70,7 @@ struct device_api modminer_api;
 // 45 noops sent when detecting, in case the device was left in "start job" reading
 static const char NOOP[] = "\0\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
 
-static bool modminer_detect_one(struct libusb_device *dev, unsigned char ep_in, unsigned char ep_out)
+static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	char buf[0x100];
 	char *devname = NULL;
@@ -84,7 +84,7 @@ static bool modminer_detect_one(struct libusb_device *dev, unsigned char ep_in, 
 	modminer->modminer_mutex = calloc(1, sizeof(*(modminer->modminer_mutex)));
 	mutex_init(modminer->modminer_mutex);
 
-	if (!usb_init(modminer, dev, ep_in, ep_out))
+	if (!usb_init(modminer, dev, found))
 		goto shin;
 
 	// Don't care if it fails
@@ -126,8 +126,8 @@ static bool modminer_detect_one(struct libusb_device *dev, unsigned char ep_in, 
 		goto unshin;
 	}
 
-	// TODO: check if it supports 2 byte temperatures and if not
-	// add a flag and set it use 1 byte and code to use the flag
+	// TODO: flag it use 1 byte temp if it is an old firmware
+	// can detect with modminer->cgusb->serial ?
 
 	if (buf[0] == 0) {
 		applog(LOG_ERR, "ModMiner detect: zero FPGA count from %s", devname);
@@ -143,7 +143,7 @@ static bool modminer_detect_one(struct libusb_device *dev, unsigned char ep_in, 
 
 	modminer->name = devname;
 
-	// TODO: test with 1 board missing in the middle
+	// TODO: test with 1 board missing in the middle and each end
 	for (i = 0; i < buf[0]; i++) {
 		struct cgpu_info *tmp = calloc(1, sizeof(*tmp));
 
@@ -659,8 +659,7 @@ static bool modminer_fpga_init(struct thr_info *thr)
 			return false;
 
 		mutex_unlock(modminer->modminer_mutex);
-	}
-	else {
+	} else {
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_DEBUG, "%s%u: FPGA is already programmed :)",
@@ -708,6 +707,7 @@ static bool modminer_start_work(struct thr_info *thr)
 	mutex_lock(modminer->modminer_mutex);
 
 	if ((err = usb_write(modminer, (char *)(state->next_work_cmd), 46, &amount)) < 0 || amount != 46) {
+// TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Start work failed (%d:%d)",
@@ -719,6 +719,7 @@ static bool modminer_start_work(struct thr_info *thr)
 	gettimeofday(&state->tv_workstart, NULL);
 	state->hashes = 0;
 
+// TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
 	sta = get_status(modminer, "start work");
 
 	if (sta)
@@ -821,6 +822,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 	while (1) {
 		mutex_lock(modminer->modminer_mutex);
 		if ((err = usb_write(modminer, cmd, 2, &amount)) < 0 || amount != 2) {
+// TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
 			mutex_unlock(modminer->modminer_mutex);
 
 			applog(LOG_ERR, "%s%u: Error sending (get nonce) (%d:%d)",
@@ -833,6 +835,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 		mutex_unlock(modminer->modminer_mutex);
 
 		if (err < 0 || amount != 4) {
+// TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
 			applog(LOG_ERR, "%s%u: Error reading (get nonce) (%d:%d)",
 				modminer->api->name, modminer->device_id, amount, err);
 
@@ -858,8 +861,7 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 					modminer_delta_clock(thr, MODMINER_CLOCK_UP, false);
 			}
 		} else if (++state->no_nonce_counter > 18000) {
-			// TODO: NFI what this is - but will be gone
-			// when work checking is rewritten like Icarus
+			// TODO: NFI what this is
 			state->no_nonce_counter = 0;
 			modminer_delta_clock(thr, MODMINER_CLOCK_DOWN, false);
 
