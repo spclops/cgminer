@@ -100,12 +100,7 @@ static const char *BLANK = "";
 static pthread_mutex_t *list_lock = NULL;
 static struct usb_list *usb_head = NULL;
 
-// TODO: Necessary?
-#ifndef WIN32
 #define EOL "\n"
-#else
-#define EOL "\r\n"
-#endif
 
 static const char *DESDEV = "Device";
 static const char *DESCON = "Config";
@@ -446,8 +441,10 @@ static void cgusb_check_init()
 		list_lock = calloc(1, sizeof(*list_lock));
 		mutex_init(list_lock);
 
-		if (opt_usb_dump)
+		if (opt_usbdump >= 0) {
+			libusb_set_debug(NULL, opt_usbdump);
 			usb_all();
+		}
 	}
 
 	mutex_unlock(&cgusb_lock);
@@ -643,11 +640,11 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 #ifdef WIN32
 		// Windows specific message
 		case LIBUSB_ERROR_NOT_SUPPORTED:
-			applog(LOG_ERR, "USB init open device failed, err %d, you need to install a Windows USB driver for the device", err);
+			applog(LOG_ERR, "USB init, open device failed, err %d, you need to install a Windows USB driver for the device", err);
 			break;
 #endif
 		default:
-			applog(LOG_ERR, "USB init open device failed, err %d", err);
+			applog(LOG_ERR, "USB init, open device failed, err %d", err);
 		}
 
 		goto dame;
@@ -705,8 +702,8 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 
 	err = libusb_claim_interface(cgusb->handle, found->interface);
 	if (err) {
-		applog(LOG_ERR, "USB init, claim if %d failed, err %d", found->interface, err);
-
+		applog(LOG_DEBUG, "USB init, claim interface %d failed, err %d",
+			found->interface, err);
 		goto cldame;
 	}
 
@@ -717,7 +714,6 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 // TODO: allow this with the right version of the libusb include and running library
 //	cgusb->speed = libusb_get_device_speed(dev);
 
-	// TODO: do these 3 still get garbage replies ?
 	err = libusb_get_string_descriptor_ascii(cgusb->handle,
 				cgusb->descriptor->iProduct, strbuf, STRBUFLEN);
 	if (err > 0)
@@ -740,7 +736,7 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 		cgusb->serial_string = (char *)BLANK;
 
 // TODO: ?
-//	cgusb->fwVersion <- for temp1/temp2 decision? or serial? (driver-midminer.c)
+//	cgusb->fwVersion <- for temp1/temp2 decision? or serial? (driver-modminer.c)
 //	cgusb->interfaceVersion
 
 	applog(LOG_DEBUG, "USB init device bus_number=%d device_address=%d usbver=%04x prod='%s' manuf='%s' serial='%s'", (int)(cgusb->bus_number), (int)(cgusb->device_address), cgusb->usbver, cgusb->prod_string, cgusb->manuf_string, cgusb->serial_string);

@@ -35,7 +35,7 @@
 
 // N.B. in the latest firmware the limit is 250
 // however the voltage/temperature risks preclude that
-#define MODMINER_MAX_CLOCK 220
+#define MODMINER_MAX_CLOCK 230
 #define MODMINER_DEF_CLOCK 200
 #define MODMINER_MIN_CLOCK 160
 
@@ -44,18 +44,28 @@
 #define MODMINER_CLOCK_UP 2
 
 // Commands
+#define MODMINER_PING "\x00"
 #define MODMINER_GET_VERSION "\x01"
 #define MODMINER_FPGA_COUNT "\x02"
 // Commands + require FPGAid
+#define MODMINER_GET_IDCODE '\x03'
 #define MODMINER_GET_USERCODE '\x04'
 #define MODMINER_PROGRAM '\x05'
 #define MODMINER_SET_CLOCK '\x06'
+#define MODMINER_READ_CLOCK '\x07'
 #define MODMINER_SEND_WORK '\x08'
 #define MODMINER_CHECK_WORK '\x09'
 // One byte temperature reply
 #define MODMINER_TEMP1 '\x0a'
 // Two byte temperature reply
 #define MODMINER_TEMP2 '\x0d'
+
+// +6 bytes
+#define MODMINER_SET_REG '\x0b'
+// +2 bytes
+#define MODMINER_GET_REG '\x0c'
+
+#define FPGAID_ALL 4
 
 // Maximum how many good shares in a row means clock up
 // 96 is ~34m22s at 200MH/s
@@ -68,11 +78,30 @@
 struct device_api modminer_api;
 
 // 45 noops sent when detecting, in case the device was left in "start job" reading
-static const char NOOP[] = "\0\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
+static const char NOOP[] = MODMINER_PING "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
+
+static void do_ping(struct cgpu_info *modminer)
+{
+	char buf[0x100+1];
+	int err, amount;
+
+	// Don't care if it fails
+	err = usb_write(modminer, (char *)NOOP, sizeof(NOOP)-1, &amount);
+	applog(LOG_DEBUG, "%s%u: flush noop got %d err %d",
+		modminer->api->name, modminer->fpgaid, amount, err);
+
+	// Clear any outstanding data
+	while ((err = usb_read(modminer, buf, sizeof(buf)-1, &amount)) == 0 && amount > 0)
+		applog(LOG_DEBUG, "%s%u: clear got %d",
+			modminer->api->name, modminer->fpgaid, amount);
+
+	applog(LOG_DEBUG, "%s%u: final clear got %d err %d",
+		modminer->api->name, modminer->fpgaid, amount, err);
+}
 
 static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
-	char buf[0x100];
+	char buf[0x100+1];
 	char *devname = NULL;
 	char devpath[20];
 	int err, i, amount;
@@ -83,19 +112,12 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	modminer->api = &modminer_api;
 	modminer->modminer_mutex = calloc(1, sizeof(*(modminer->modminer_mutex)));
 	mutex_init(modminer->modminer_mutex);
+	modminer->fpgaid = (char)0;
 
 	if (!usb_init(modminer, dev, found))
 		goto shin;
 
-	// Don't care if it fails
-	err = usb_write(modminer, (char *)NOOP, sizeof(NOOP)-1, &amount);
-	applog(LOG_DEBUG, "ModMiner detect: noop got %d err %d", amount, err);
-
-	// Clear any outstanding data before starting fresh
-	while ((err = usb_read(modminer, buf, sizeof(buf)-1, &amount)) == 0 && amount > 0)
-		applog(LOG_DEBUG, "ModMiner detect: clear got %d", amount);
-
-	applog(LOG_DEBUG, "ModMiner detect: final clear got %d err %d", amount, err);
+	do_ping(modminer);
 
 	if ((err = usb_write(modminer, MODMINER_GET_VERSION, 1, &amount)) < 0 || amount != 1) {
 		applog(LOG_ERR, "ModMiner detect: send version request failed (%d:%d)", amount, err);
@@ -144,6 +166,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	modminer->name = devname;
 
 	// TODO: test with 1 board missing in the middle and each end
+	// to see how that affects the sequence numbers
 	for (i = 0; i < buf[0]; i++) {
 		struct cgpu_info *tmp = calloc(1, sizeof(*tmp));
 
@@ -294,7 +317,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 	unsigned long totlen, len;
 	size_t buflen, remaining;
 	float nextmsg, upto;
-	char fpgaid = 4;  // "all FPGAs"
+	char fpgaid = FPGAID_ALL;
 	int err, amount, tries;
 	char *ptr;
 
@@ -441,6 +464,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 	if (!get_status(modminer, "initialise"))
 		goto undame;
 
+// It must be 32 bytes according to MCU legacy.c
 #define WRITE_SIZE 32
 
 	totlen = len;
@@ -708,6 +732,7 @@ static bool modminer_start_work(struct thr_info *thr)
 
 	if ((err = usb_write(modminer, (char *)(state->next_work_cmd), 46, &amount)) < 0 || amount != 46) {
 // TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
+// but check all (4) disappeared
 		mutex_unlock(modminer->modminer_mutex);
 
 		applog(LOG_ERR, "%s%u: Start work failed (%d:%d)",
@@ -719,7 +744,6 @@ static bool modminer_start_work(struct thr_info *thr)
 	gettimeofday(&state->tv_workstart, NULL);
 	state->hashes = 0;
 
-// TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
 	sta = get_status(modminer, "start work");
 
 	if (sta)
@@ -728,20 +752,13 @@ static bool modminer_start_work(struct thr_info *thr)
 	return sta;
 }
 
-#define work_restart(thr)  thr->work_restart
-
-static uint64_t modminer_process_results(struct thr_info *thr)
+static void check_temperature(struct thr_info *thr)
 {
 	struct cgpu_info *modminer = thr->cgpu;
 	struct modminer_fpga_state *state = thr->cgpu_data;
-	struct work *work = &state->running_work;
-
 	char cmd[2], temperature[2];
-	uint32_t nonce;
-	long iter;
-	uint32_t curr_hw_errors;
 	int tbytes, tamount;
-	int err, amount;
+	int amount;
 
 	if (modminer->one_byte_temp) {
 		cmd[0] = MODMINER_TEMP1;
@@ -770,7 +787,6 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 		if (state->overheated) {
 			if (modminer->temp < MODMINER_OVERHEAT_TEMP) {
 				state->overheated = false;
-				modminer->deven = DEV_ENABLED;
 				applog(LOG_WARNING, "%s%u: Recovered, temp less than (%f) now %f",
 					modminer->api->name, modminer->device_id,
 					MODMINER_OVERHEAT_TEMP, modminer->temp);
@@ -784,7 +800,6 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 
 				modminer_delta_clock(thr, MODMINER_OVERHEAT_CLOCK, true);
 
-				modminer->deven = DEV_RECOVER;
 				modminer->device_last_not_well = time(NULL);
 				modminer->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
 				modminer->dev_thermal_cutoff_count++;
@@ -809,38 +824,58 @@ static uint64_t modminer_process_results(struct thr_info *thr)
 			modminer->one_byte_temp = true;
 		}
 	}
+}
 
-	// TODO: fix this to work properly
+#define work_restart(thr)  thr->work_restart
+
+static uint64_t modminer_process_results(struct thr_info *thr)
+{
+	struct cgpu_info *modminer = thr->cgpu;
+	struct modminer_fpga_state *state = thr->cgpu_data;
+	struct work *work = &state->running_work;
+	char cmd[2];
+	uint32_t nonce;
+	long iter;
+	uint32_t curr_hw_errors;
+	int err, amount;
+
+	check_temperature(thr);
+
 	if (state->overheated == true) {
+		if (state->work_running)
+			state->work_running = false;
+
 		// Give it 5 seconds rest and wait for the next work
 		usleep(5000000);
-		return 0; // <- can't return '0'
+		return 0;
 	}
 
 	cmd[0] = MODMINER_CHECK_WORK;
+	cmd[1] = modminer->fpgaid;
 	iter = 200;
 	while (1) {
 		mutex_lock(modminer->modminer_mutex);
 		if ((err = usb_write(modminer, cmd, 2, &amount)) < 0 || amount != 2) {
 // TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
+// but check all (4) disappeared
 			mutex_unlock(modminer->modminer_mutex);
 
 			applog(LOG_ERR, "%s%u: Error sending (get nonce) (%d:%d)",
 				modminer->api->name, modminer->device_id, amount, err);
 
-			return 0;
+			return -1;
 		}
 
 		err = usb_read(modminer, (char *)(&nonce), 4, &amount);
 		mutex_unlock(modminer->modminer_mutex);
 
 		if (err < 0 || amount != 4) {
-// TODO: err = -4 means the MMQ disappeared - need to delete it and rescan for it? (after a delay?)
 			applog(LOG_ERR, "%s%u: Error reading (get nonce) (%d:%d)",
 				modminer->api->name, modminer->device_id, amount, err);
 
-			// TODO: flush work ? and start again ?
+			// TODO: flush work ? and start again ? ignore -7 ?
 			// however we can't just keep doing this - need a limit
+			// but most likely the next usb_write above will also fail?
 		}
 
 		if (memcmp(&nonce, "\xff\xff\xff\xff", 4)) {
@@ -899,9 +934,25 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 	int64_t hashes = 0;
 	bool startwork;
 
+	if (state->overheated == true) {
+		if (state->work_running)
+			state->work_running = false;
+
+		check_temperature(thr);
+
+		if (state->overheated == true) {
+			// Give it 5 seconds rest and wait for the next work
+			usleep(5000000);
+			return 0;
+		}
+	}
+
 	startwork = modminer_prepare_next_work(state, work);
 	if (state->work_running) {
 		hashes = modminer_process_results(thr);
+		if (hashes == -1)
+			return hashes;
+
 		if (work_restart(thr)) {
 			state->work_running = false;
 			return 0;

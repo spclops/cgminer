@@ -147,7 +147,7 @@ char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
 #ifdef HAVE_LIBUSB
-bool opt_usb_dump;
+int opt_usbdump = -1;
 #endif
 
 char *opt_kernel_path;
@@ -1107,8 +1107,9 @@ static struct opt_table opt_config_table[] = {
 		     set_user, NULL, NULL,
 		     "Username for bitcoin JSON-RPC server"),
 #ifdef HAVE_LIBUSB
-	OPT_WITHOUT_ARG("--usb-dump",
-		     opt_set_bool, &opt_usb_dump, opt_hidden),
+	OPT_WITH_ARG("--usb-dump",
+		     set_int_0_to_10, opt_show_intval, &opt_usbdump,
+		     opt_hidden),
 #endif
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--vectors|-v",
