@@ -74,7 +74,7 @@ endif # HAS_YASM
 endif # HAS_CPUMINE
 
 if NEED_FPGAUTILS
-cgminer_SOURCES += fpgautils.c fpgautils.h usbutils.c
+cgminer_SOURCES += fpgautils.c fpgautils.h
 endif
 
 if HAS_BITFORCE
@@ -86,7 +86,7 @@ cgminer_SOURCES += driver-icarus.c
 endif
 
 if HAS_MODMINER
-cgminer_SOURCES += driver-modminer.c
+cgminer_SOURCES += driver-modminer.c usbutils.c
 bitstreamsdir = $(bindir)/bitstreams
 dist_bitstreams_DATA = bitstreams/*
 endif

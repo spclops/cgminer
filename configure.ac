@@ -323,7 +323,7 @@ fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
-if test "x$bitforce$modminer" != xnono; then
+if test "x$bitforce" != xno; then
 	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
 		[libudev=$withval],
 		[libudev=auto]
@@ -343,7 +343,7 @@ if test "x$bitforce$modminer" != xnono; then
 fi
 AM_CONDITIONAL([HAVE_LIBUDEV], [test x$libudev != xno])
 
-if test "x$ztex" != xno; then
+if test "x$ztex$modminer" != xnono; then
   AC_CHECK_LIB(usb-1.0, libusb_init, ,
           AC_MSG_ERROR([Could not find usb library - please install libusb]))
   AC_DEFINE([HAVE_LIBUSB], [1], [Defined to 1 if libusb is wanted])
