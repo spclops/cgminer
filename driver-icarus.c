@@ -961,6 +961,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	cgtime(&tv_start);
 
 	do {
+		struct timeval tv_end, tv_add;
 		int rc;
 
 		if (unlikely(icarus->usbinfo.nodev))
@@ -993,8 +994,11 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		}
 
 		/* Wait on the conditional or cycle every 100ms */
-		abstime.tv_sec = 0;
-		abstime.tv_nsec = 100000000;
+		tv_add.tv_sec = 0;
+		tv_add.tv_usec = 100000;
+		timeradd(&tv_finish, &tv_add, &tv_end);
+		abstime.tv_sec = tv_end.tv_sec;
+		abstime.tv_nsec = tv_end.tv_usec * 1000;
 
 		mutex_lock(&info->lock);
 		if (!info->result)
