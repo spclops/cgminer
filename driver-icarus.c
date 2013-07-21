@@ -850,22 +850,36 @@ static void *icarus_read_nonces(void *arg)
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)icarus->device_data;
 
 	while (likely(!icarus->shutdown)) {
+		struct timeval tv_start;
 		char nonce_buf[ICARUS_READ_SIZE];
 		int err, amt;
 
 		if (unlikely(icarus->usbinfo.nodev))
 			break;
 
+		cgtime(&tv_start);
 		err = usb_read_once_notimeout(icarus, nonce_buf, ICARUS_READ_SIZE,
 					 &amt, C_GETRESULTS);
+
 		if (err < 0) {
 			applog(LOG_ERR, "%s%i: Comms error (rerr=%d amt=%d)",
 					icarus->drv->name, icarus->device_id, err, amt);
 			dev_error(icarus, REASON_DEV_COMMS_ERROR);
 			continue;
 		}
-		if (!amt)
+		if (!amt) {
+			struct timeval tv_finish, tv_diff;
+			int us_diff, read_delay;
+
+			cgtime(&tv_finish);
+			timersub(&tv_finish, &tv_start, &tv_diff);
+			us_diff = tv_diff.tv_sec * 1000000;
+			us_diff += tv_diff.tv_usec;
+			read_delay = 100000 - us_diff;
+			if (read_delay >= 1000)
+				nusleep(read_delay);
 			continue;
+		}
 
 		mutex_lock(&info->lock);
 		info->result = true;
