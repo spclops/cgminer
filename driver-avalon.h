@@ -95,6 +95,14 @@ struct avalon_result {
 	uint8_t miner_num;
 } __attribute__((packed, aligned(4)));
 
+#define RESULT_MATCHES 16
+
+struct last_results {
+	uint8_t midstate[32];
+	uint8_t data[12];
+	uint32_t nonce;
+};
+
 struct avalon_info {
 	int baud;
 	int miner_count;
@@ -139,6 +147,12 @@ struct avalon_info {
 	bool reset;
 	bool overheat;
 	bool optimal;
+
+	struct last_results last_results[RESULT_MATCHES];
+	int last_offset;
+	int last_total;
+
+	int dup_count[AVALON_DEFAULT_MINER_NUM];
 };
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))

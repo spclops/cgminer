@@ -206,17 +206,41 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 	return ret;
 }
 
-static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
-				struct avalon_info *info, struct avalon_result *ar,
-				struct work *work)
+static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_info *info,
+				struct avalon_result *ar, struct work *work)
 {
 	uint32_t nonce;
+	bool ok;
+	int i;
 
-	info = avalon->device_data;
 	info->matching_work[work->subid]++;
 	nonce = htole32(ar->nonce);
-	applog(LOG_DEBUG, "Avalon: nonce = %0x08x", nonce);
-	return submit_nonce(thr, work, nonce);
+
+	ok = true;
+	for (i = 0; i < info->last_total; i++)
+		if (memcmp(info->last_results[i].midstate, work->midstate, 32) == 0 &&
+				memcmp(info->last_results[i].data, work->data + 64, 12) == 0 &&
+				info->last_results[i].nonce == nonce) {
+			ok = false;
+			break;
+		}
+
+	if (ok) {
+		memcpy(info->last_results[info->last_offset].midstate, work->midstate, 32);
+		memcpy(info->last_results[info->last_offset].data, work->data + 64, 12);
+		info->last_results[info->last_offset].nonce = nonce;
+		if (++(info->last_offset) >= RESULT_MATCHES)
+			info->last_offset = 0;
+		if (info->last_total < RESULT_MATCHES)
+			info->last_total++;
+
+		applog(LOG_DEBUG, "Avalon: nonce = 0x%08x", nonce);
+		return submit_nonce(thr, work, nonce);
+	}
+
+	info->dup_count[work->subid]++;
+	applog(LOG_WARNING, "Avalon: dup nonce = 0x%08x", nonce);
+	return false;
 }
 
 /* Wait until the ftdi chip returns a CTS saying we can send more data. */
@@ -783,7 +807,7 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 
 			found = true;
 
-			if (avalon_decode_nonce(thr, avalon, info, ar, work)) {
+			if (avalon_decode_nonce(thr, info, ar, work)) {
 				mutex_lock(&info->lock);
 				if (!info->nonces++)
 					gettemp = true;
@@ -1344,8 +1368,18 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	for (i = 0; i < info->miner_count; i++) {
 		char mcw[24];
 
-		sprintf(mcw, "match_work_count%d", i + 1);
-		root = api_add_int(root, mcw, &(info->matching_work[i]), false);
+		if (info->matching_work[i]) {
+			snprintf(mcw, sizeof(mcw), "match_work_count%d", i + 1);
+			root = api_add_int(root, mcw, &(info->matching_work[i]), false);
+		}
+	}
+	for (i = 0; i < info->miner_count; i++) {
+		char dmw[24];
+
+		if (info->dup_count[i]) {
+			snprintf(dmw, sizeof(dmw), "dup_matching_work%d", i + 1);
+			root = api_add_int(root, dmw, &(info->dup_count[i]), false);
+		}
 	}
 
 	return root;
