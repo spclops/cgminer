@@ -50,6 +50,10 @@
 #define DRV_AVALON 6
 #endif
 
+#ifdef USE_KLONDIKE
+#define DRV_KLONDIKE 7
+#endif
+
 #define DRV_LAST -1
 
 #define USB_CONFIG 1
@@ -59,12 +63,14 @@
 #define BITFORCE_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 999
 #define AVALON_TIMEOUT_MS 999
+#define KLONDIKE_TIMEOUT_MS 999
 #define ICARUS_TIMEOUT_MS 999
 #else
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
+#define KLONDIKE_TIMEOUT_MS 200
 #define ICARUS_TIMEOUT_MS 200
 #endif
 
@@ -97,6 +103,13 @@ static struct usb_endpoints mmq_eps[] = {
 static struct usb_endpoints ava_eps[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+#endif
+
+#ifdef USE_KLONDIKE
+static struct usb_endpoints kln_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0 }
 };
 #endif
 
@@ -218,6 +231,21 @@ static struct usb_find_devices find_dev[] = {
 		.latency = 10,
 		.epcount = ARRAY_SIZE(ava_eps),
 		.eps = ava_eps },
+#endif
+#ifdef USE_KLONDIKE
+	{
+		.drv = DRV_KLONDIKE,
+		.name = "KLN",
+		.ident = IDENT_KLN,
+		.idVendor = 0x04D8,
+		.idProduct = 0xF60A,
+		.kernel = 0,
+		.config = 1,
+		.interface = 0,
+		.timeout = KLONDIKE_TIMEOUT_MS,
+		.latency = 10,
+		.epcount = ARRAY_SIZE(kln_eps),
+		.eps = kln_eps },
 #endif
 #ifdef USE_ICARUS
 	{
@@ -341,6 +369,10 @@ extern struct device_drv icarus_drv;
 
 #ifdef USE_AVALON
 extern struct device_drv avalon_drv;
+#endif
+
+#ifdef USE_KLONDIKE
+extern struct device_drv klondike_drv;
 #endif
 
 #define STRBUFLEN 256
@@ -1929,6 +1961,11 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 		return usb_check_each(DRV_AVALON, drv, dev);
 #endif
 
+#ifdef USE_KLONDIKE
+	if (drv->drv_id == DRIVER_KLONDIKE)
+		return usb_check_each(DRV_KLONDIKE, drv, dev);
+#endif
+
 	return NULL;
 }
 
@@ -3129,6 +3166,7 @@ void usb_cleanup()
 			case DRIVER_MODMINER:
 			case DRIVER_ICARUS:
 			case DRIVER_AVALON:
+			case DRIVER_KLONDIKE:
 				wr_lock(cgpu->usbinfo.devlock);
 				release_cgpu(cgpu);
 				wr_unlock(cgpu->usbinfo.devlock);
@@ -3280,6 +3318,12 @@ void usb_initialise()
 #ifdef USE_AVALON
 				if (!found && strcasecmp(ptr, avalon_drv.name) == 0) {
 					drv_count[avalon_drv.drv_id].limit = lim;
+					found = true;
+				}
+#endif
+#ifdef USE_KLONDIKE
+				if (!found && strcasecmp(ptr, klondike_drv.name) == 0) {
+					drv_count[klondike_drv.drv_id].limit = lim;
 					found = true;
 				}
 #endif

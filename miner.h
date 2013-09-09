@@ -228,6 +228,7 @@ enum drv_driver {
 	DRIVER_ZTEX,
 	DRIVER_BFLSC,
 	DRIVER_AVALON,
+	DRIVER_KLONDIKE,
 	DRIVER_MAX
 };
 
@@ -897,6 +898,9 @@ extern char *opt_icarus_timing;
 extern bool opt_worktime;
 #ifdef USE_AVALON
 extern char *opt_avalon_options;
+#endif
+#ifdef USE_KLONDIKE
+extern char *opt_klondike_options;
 #endif
 #ifdef USE_USBUTILS
 extern char *opt_usb_select;

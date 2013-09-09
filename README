@@ -114,6 +114,7 @@ CGMiner specific configuration options:
 	--enable-modminer       Compile support for ModMiner FPGAs(default disabled)
 	--enable-ztex           Compile support for Ztex Board(default disabled)
 	--enable-avalon         Compile support for Avalon (default disabled)
+	--enable-klondike       Compile support for Klondike (default disabled)
 	--enable-scrypt         Compile support for scrypt litecoin mining (default disabled)
 	--without-curses        Compile support for curses TUI (default enabled)
 
@@ -220,6 +221,7 @@ ASIC only options:
 --avalon-temp <arg> Set avalon target temperature (default: 50)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
+--klondike-options <arg> Set klondike options clock:temp1:temp2:fan
 
 See ASIC-README for more information regarding these.
 
@@ -269,8 +271,8 @@ See SCRYPT-README for more information regarding litecoin mining.
 
 
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
-FPGAs, Icarus bitstream FPGAs, ASICMINER usb block erupters, ModMiner FPGAs,
-or Ztex FPGAs
+FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
+ModMiner FPGAs, or Ztex FPGAs
 
 ---
 
@@ -314,7 +316,7 @@ just reboot.
 Advanced USB options:
 
 The --usb option can restrict how many Avalon, BFL ASIC, BitForce FPGAs,
-ModMiner FPGAs or Icarus bitstream FPGAs it finds:
+Klondike ASIC, ModMiner FPGAs or Icarus bitstream FPGAs it finds:
 
   --usb 1:2,1:3,1:4,1:*
 or

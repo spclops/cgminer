@@ -262,6 +262,17 @@ if test "x$avalon" = xyes; then
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
+klondike="no"
+
+AC_ARG_ENABLE([klondike],
+	[AC_HELP_STRING([--enable-klondike],[Compile support for Klondike (default disabled)])],
+	[klondike=$enableval]
+	)
+if test "x$klondike" = xyes; then
+	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
+fi
+AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
+
 modminer="no"
 
 AC_ARG_ENABLE([modminer],
@@ -308,7 +319,7 @@ else
 	])
 fi
 
-if test x$avalon$bitforce$modminer$bflsc$icarus != xnonononono; then
+if test x$avalon$bitforce$modminer$bflsc$icarus$klondike != xnononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -458,14 +469,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$bitforce$avalon$icarus$ztex$modminer$bflsc" = xnononononono; then
+		if test "x$bitforce$avalon$icarus$ztex$modminer$bflsc$klondike" = xnonononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$bitforce$icarus$avalon$ztex$modminer$bflsc" = xnononononono; then
+	if test "x$bitforce$icarus$avalon$ztex$modminer$bflsc$klondike" = xnonononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -504,6 +515,12 @@ if test "x$icarus" = xyes; then
 	echo "  Icarus.FPGAs.........: Enabled"
 else
 	echo "  Icarus.FPGAs.........: Disabled"
+fi
+
+if test "x$klondike" = xyes; then
+	echo "  Klondike.ASICs.......: Enabled"
+else
+	echo "  Klondike.ASICs.......: Disabled"
 fi
 
 if test "x$modminer" = xyes; then

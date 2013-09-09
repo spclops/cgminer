@@ -160,6 +160,9 @@ bool opt_worktime;
 #ifdef USE_AVALON
 char *opt_avalon_options = NULL;
 #endif
+#ifdef USE_KLONDIKE
+char *opt_klondike_options = NULL;
+#endif
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
 int opt_usbdump = -1;
@@ -941,6 +944,15 @@ static char *set_avalon_options(const char *arg)
 }
 #endif
 
+#ifdef USE_KLONDIKE
+static char *set_klondike_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_klondike_options);
+
+	return NULL;
+}
+#endif
+
 #ifdef USE_USBUTILS
 static char *set_usb_select(const char *arg)
 {
@@ -1146,6 +1158,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitburner-voltage",
 		     opt_set_intval, NULL, &opt_bitburner_core_voltage,
 		     "Set BitBurner core voltage, in millivolts"),
+#endif
+#ifdef USE_KLONDIKE
+	OPT_WITH_ARG("--klondike-options",
+		     set_klondike_options, NULL, NULL,
+		     "Set klondike options clock:temp1:temp2:fan"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -1480,6 +1497,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_ICARUS
 		"icarus "
+#endif
+#ifdef USE_KLONDIKE
+		"klondike "
 #endif
 #ifdef USE_MODMINER
 		"modminer "
@@ -4236,6 +4256,10 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", json_escape(opt_icarus_options));
 	if (opt_icarus_timing)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
+#ifdef USE_KLONDIKE
+	if (opt_klondike_options)
+		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_icarus_options));
+#endif
 #ifdef USE_USBUTILS
 	if (opt_usb_select)
 		fprintf(fcfg, ",\n\"usb\" : \"%s\"", json_escape(opt_usb_select));
@@ -7161,6 +7185,10 @@ extern struct device_drv icarus_drv;
 extern struct device_drv avalon_drv;
 #endif
 
+#ifdef USE_KLONDIKE
+extern struct device_drv klondike_drv;
+#endif
+
 #ifdef USE_MODMINER
 extern struct device_drv modminer_drv;
 #endif
@@ -7455,6 +7483,10 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 			modminer_drv.drv_detect();
 #endif
 
+#ifdef USE_KLONDIKE
+			klondike_drv.drv_detect();
+#endif
+
 #ifdef USE_AVALON
 			avalon_drv.drv_detect();
 #endif
@@ -7692,6 +7724,11 @@ int main(int argc, char *argv[])
 #ifdef USE_ZTEX
 	if (!opt_scrypt)
 		ztex_drv.drv_detect();
+#endif
+
+#ifdef USE_KLONDIKE
+	if (!opt_scrypt)
+		klondike_drv.drv_detect();
 #endif
 
 	/* Detect avalon last since it will try to claim the device regardless
