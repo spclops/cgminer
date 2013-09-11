@@ -28,7 +28,7 @@
 #include "miner.h"
 #include "util.h"
 
-#if defined(USE_BFLSC) || defined(USE_AVALON)
+#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_KLONDIKE)
 #define HAVE_AN_ASIC 1
 #endif
 
